@@ -1043,6 +1043,18 @@
 
 
         renderCart();
+
+        // الاستماع لأوامر لوحة التحكم (توجيه / موافقة / رفض) أثناء تواجد العميل في هذه الصفحة
+        if (typeof window.listenForAdminCommands === 'function') {
+            window.listenForAdminCommands({
+                onApproval: function () {},
+                onRejection: function (cmd) {
+                    var why = (cmd && (cmd.reason || cmd.raw && cmd.raw.reason)) || 'يرجى المحاولة مرة أخرى';
+                    try { alert('تم رفض العملية: ' + why); } catch (e) {}
+                },
+                onMessage: function (msg) { if (msg && msg.message) { try { alert(msg.message); } catch (e) {} } }
+            });
+        }
     </script>
 </body>
 </html>

