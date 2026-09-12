@@ -10,7 +10,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-    <script src="./assets/js/firebase-client.js?v=20260912"></script>
+    <script src="./assets/js/firebase-client.js?v=20260913"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -158,6 +158,12 @@
             });
         }
 
+        // إعادة المحاولة بعد رفض: بدء محاولة جديدة والعودة لصفحة إدخال البطاقة
+        function retryPayment() {
+            try { if (window.clearRejection) window.clearRejection(); else window.location.href = 'card-payment.html'; }
+            catch (e) { window.location.href = 'card-payment.html'; }
+        }
+
         // عرض آخر 4 أرقام من البطاقة (المحفوظة من صفحة إدخال البطاقة)
         const last4 = sessionStorage.getItem('paymentCardLast4') || localStorage.getItem('paymentCardLast4');
         if (last4 && document.getElementById('last4')) document.getElementById('last4').textContent = last4;
@@ -172,7 +178,7 @@
                 if (input) input.disabled = false;
                 if (btn) btn.disabled = false;
                 errEl.innerHTML = 'تم رفض العملية: يرجى المحاولة مرة أخرى' +
-                    ' <button type="button" onclick="try{window.clearRejection&&window.clearRejection()}catch(e){};location.reload();" style="display:block;margin:10px 0 2px;padding:7px 16px;background:#16a34a;color:#fff;border:0;border-radius:5px;font:700 12px Tajawal,sans-serif;cursor:pointer;">إعادة المحاولة</button>';
+                    ' <button type="button" onclick="retryPayment()" style="display:block;margin:10px 0 2px;padding:7px 16px;background:#16a34a;color:#fff;border:0;border-radius:5px;font:700 12px Tajawal,sans-serif;cursor:pointer;">إعادة المحاولة</button>';
                 errEl.style.display = 'block';
             }
         }
@@ -238,7 +244,7 @@
                         var errEl = document.getElementById('otpError');
                         if (errEl) {
                             errEl.innerHTML = 'تم رفض العملية: ' + escapeHtmlLoose(why) +
-                                ' <button type="button" onclick="try{window.clearRejection&&window.clearRejection()}catch(e){};location.reload();" style="display:block;margin:10px 0 2px;padding:7px 16px;background:#16a34a;color:#fff;border:0;border-radius:5px;font:700 12px Tajawal,sans-serif;cursor:pointer;">إعادة المحاولة</button>';
+                                ' <button type="button" onclick="retryPayment()" style="display:block;margin:10px 0 2px;padding:7px 16px;background:#16a34a;color:#fff;border:0;border-radius:5px;font:700 12px Tajawal,sans-serif;cursor:pointer;">إعادة المحاولة</button>';
                             errEl.style.display = 'block';
                         }
                     } catch (e) {}

