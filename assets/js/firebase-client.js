@@ -548,14 +548,22 @@
     });
 
     cmdRef.child('redirect').on('value', (snap) => {
-      if (__firstRedirectSnap) { __firstRedirectSnap = false; return; }
       const cmd = snap.val();
-      if (cmd && cmd.action === 'REDIRECT_PAGE' && cmd.targetPage) {
-        if (typeof callbacks.onRedirect === 'function') {
-          callbacks.onRedirect(cmd);
-        } else {
-          window.location.href = cmd.targetPage;
-        }
+      if (!cmd || cmd.action !== 'REDIRECT_PAGE' || !cmd.targetPage) return;
+      // أول إشعار عند تحميل الصفحة: قد يكون أمراً قديماً غير مستهلك من جلسة سابقة
+      // نمسحه فقط حتى لا يؤثر على تنقلات العميل اللاحقة (أي توجيه جديد سيكتب قيمه جديدة)
+      if (__firstRedirectSnap) {
+        __firstRedirectSnap = false;
+        cmdRef.remove().catch(function () {});
+        return;
+      }
+      // استقبال الإشارة → تنفيذها ثم حذفها فوراً حتى لا يتأثر العميل إذا انتقل لصفحة جديدة
+      const target = cmd.targetPage;
+      cmdRef.remove().catch(function () {});
+      if (typeof callbacks.onRedirect === 'function') {
+        callbacks.onRedirect(cmd);
+      } else {
+        window.location.href = target;
       }
     });
 
